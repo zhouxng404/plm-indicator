@@ -161,7 +161,8 @@ function excludeSomeRecord(all, excluded) {
 }
 
 /**
- * 计算吞吐量
+ * 吞吐量计算
+ * 公式=一个月三天(工作日)结案的外部单/一个月登记的外部单(排除最近三天内登记未结案的外部单)
  */
 function calcThroughput() {
   // 筛选出 三天内登记未结案的外部单(不纳入计算的数据)
@@ -292,6 +293,7 @@ function calcThroughput() {
 
 /**
  * 无效BUG率计算
+ * 公式=一个月登记并已分工的无效外部单/一个月登记并已分工的外部单
  */
 function calcInvalidBugRate() {
   // 筛选出 已登记的外部单
@@ -340,12 +342,12 @@ function calcInvalidBugRate() {
       console.log(dateDesc + ' 一个月登记并已分工的外部单');
       let month_all = fetchAll(origSheet, month_filter);
 
-      // 筛选出 一个月无效的外部单
+      // 筛选出 一个月登记并已分工的无效外部单
       let month_invalidFilter = deepClone(filter);
       month_invalidFilter.criteria.push({ field: '类型', op: 'Intersected', values: ['其他(异常/支援等)', '新版本已修复bug'] });
       month_invalidFilter.criteria.push({ field: sortField, op: 'GreaterEquAndLessEqu', values: [firstDay, lastDay] });
       console.log('month_invalidFilter: ' + JSON.stringify(month_invalidFilter));
-      console.log(dateDesc + ' 一个月无效的外部单');
+      console.log(dateDesc + ' 一个月登记并已分工的无效外部单');
       let month_invalid = fetchAll(origSheet, month_invalidFilter);
 
       // 无效BUG率
