@@ -97,6 +97,41 @@ function getFirstAndLastDayOfMonth(monthString) {
 }
 
 /**
+ * 年月日 转换为 年月
+ * @param {string} monthString
+ */
+function convertToYearMonth(monthString) {
+    const [year, month] = monthString.split('/').map(String);
+    return `${year}/${month}`;
+}
+
+/**
+ * 得到上个月的第一天
+ * @param {string} monthString
+ */
+function getFirstDayOfPreviousMonth(monthString) {
+    const [year, month] = monthString.split('/').map(Number);
+    // 减去 1 个月并设置日期为 1
+    const previousMonthFirstDay = new Date(year, month - 1, 1);
+
+    const fullMonth = `${String(previousMonthFirstDay.getMonth()).padStart(2, '0')}`;
+    const previousYear = previousMonthFirstDay.getMonth() === 0 ? year - 1 : year;
+    return `${previousYear}/${fullMonth}/01`;
+}
+
+/**
+ * 得到下个月的第一天
+ * @param {string} monthString
+ */
+function getFirstDayOfNextMonth(monthString) {
+    const [year, month] = monthString.split('/').map(Number);
+    const nextMonthFirstDay = new Date(year, month, 1);
+
+    const fullMonth = `${String(nextMonthFirstDay.getMonth() + 1).padStart(2, '0')}`;
+    return `${nextMonthFirstDay.getFullYear()}/${fullMonth}/01`;
+}
+
+/**
  * 得到最近日期
  * @param {number} days
  */
@@ -163,8 +198,8 @@ function excludeSomeRecord(all, excluded) {
 /**
  * 吞吐量计算
  * 输入=当月登记的所有单据
- * 输出=当月结案的所有单据
- * 总积压=当月及以前登记的单据，在当月底未结案的单据
+ * 输出=当月结案的所有单据(登记日期<=当月)
+ * 总积压=当月及以前登记的，在当月底未结案的单据
  */
 function calcThroughput() {
     console.log('所有已登记的单据');
@@ -194,8 +229,12 @@ function calcThroughput() {
             // 一个月的开始和结束
             const {firstDay, lastDay} = getFirstAndLastDayOfMonth(month.dateStr);
 
-            // 注意：结案日期 = 状态最后修改日期，需要加上状态条件筛选
-            // 筛选出 一个月登记的单据
+            // 上个月的第一天和下个月的第一天
+            const preMonthFirstDay = getFirstDayOfPreviousMonth(firstDay);
+            const nextMonthFirstDay = getFirstDayOfNextMonth(lastDay);
+
+            // 注意：结案日期 = 状态最后修改日期，需要加上状态条件筛选。且精度固定到秒(最后修改时间)
+            // 筛选出 当月登记的单据
             let month_filter = {
                 mode: 'AND',
                 criteria: [
@@ -206,21 +245,35 @@ function calcThroughput() {
                     }
                 ]
             };
-            console.log(dateDesc + ' 一个月登记的单据');
+            console.log(dateDesc + ' 当月登记的单据');
             let month_all = fetchAll(origSheet, month_filter);
             console.log('month_all: ' + month_all.length);
 
-            // 筛选出 一个月结案的单据
-            let month_finishFilter = deepClone(month_filter);
-            month_finishFilter.criteria.push({field: '状态', op: 'Intersected', values: ['已完成', '已转交']});
-            month_finishFilter.criteria.push({
-                field: '结案日期',
-                op: 'GreaterEquAndLessEqu',
-                values: [firstDay, lastDay]
-            });
+            // 筛选出 当月结案的所有单据(登记日期<=当月)
+            let month_finishFilter = {
+                mode: 'AND',
+                criteria: [
+                    {
+                        field: '登记日期',
+                        op: 'Less',
+                        values: [nextMonthFirstDay]
+                    },
+                    {
+                        field: '状态',
+                        op: 'Intersected',
+                        values: ['已完成', '已转交']
+                    },
+                    {
+                        field: '结案日期(甘特图)',
+                        op: 'GreaterEquAndLessEqu',
+                        values: [firstDay, lastDay]
+                    }
+                ]
+            };
             console.log('month_finishFilter: ' + JSON.stringify(month_finishFilter));
-            console.log(dateDesc + ' 一个月结案的单据');
+            console.log(dateDesc + ' 当月结案的单据');
             let month_finish = fetchAll(origSheet, month_finishFilter);
+
 
             // 筛选出 当月及以前登记的数据，现在还未结案的
             let overStockFilter1 = {
@@ -228,8 +281,8 @@ function calcThroughput() {
                 criteria: [
                     {
                         field: '登记日期',
-                        op: 'LessEqu',
-                        values: [lastDay]
+                        op: 'Less',
+                        values: [nextMonthFirstDay]
                     },
                     {
                         field: '状态',
@@ -244,8 +297,8 @@ function calcThroughput() {
                 criteria: [
                     {
                         field: '登记日期',
-                        op: 'LessEqu',
-                        values: [lastDay]
+                        op: 'Less',
+                        values: [nextMonthFirstDay]
                     },
                     {
                         field: '状态',
@@ -253,14 +306,16 @@ function calcThroughput() {
                         values: ['已完成', '已转交']
                     },
                     {
-                        field: '结案日期',
+                        field: '结案日期(甘特图)',
                         op: 'Greater',
                         values: [lastDay]
                     }
                 ]
             };
             console.log(dateDesc + ' 当月及以前登记的单据，在当月底未结案的单据');
+            console.log('month_finishFilter: ' + JSON.stringify(overStockFilter1));
             let overStock1 = fetchAll(origSheet, overStockFilter1);
+            console.log('month_finishFilter: ' + JSON.stringify(overStockFilter2));
             let overStock2 = fetchAll(origSheet, overStockFilter2);
             let overStock = overStock1.length + overStock2.length;
 
